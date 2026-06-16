@@ -67,33 +67,55 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const audio = new Audio(backgroundLoop);
-    audio.loop = true;
-    audio.preload = 'auto';
-    audio.volume = 0.22;
-    audioRef.current = audio;
+    let cancelled = false;
+    let bootTimer: number | null = null;
+
+    const ensureAudio = () => {
+      if (audioRef.current) return audioRef.current;
+      const audio = new Audio(backgroundLoop);
+      audio.loop = true;
+      audio.preload = 'metadata';
+      audio.volume = 0.22;
+      audioRef.current = audio;
+      return audio;
+    };
 
     const tryPlay = () => {
+      const audio = ensureAudio();
       void audio.play().catch(() => {});
     };
 
     const resumeIfPaused = () => {
-      if (!document.hidden && audio.paused) {
+      const audio = audioRef.current;
+      if (!document.hidden && audio && audio.paused) {
         tryPlay();
       }
     };
 
-    tryPlay();
+    const bootAudio = () => {
+      if (cancelled) return;
+      tryPlay();
+    };
+
+    bootTimer = window.setTimeout(bootAudio, 900);
+
     window.addEventListener('pointerdown', tryPlay, { passive: true });
     window.addEventListener('keydown', tryPlay);
     document.addEventListener('visibilitychange', resumeIfPaused);
 
     return () => {
+      cancelled = true;
+      if (bootTimer !== null) {
+        window.clearTimeout(bootTimer);
+      }
       window.removeEventListener('pointerdown', tryPlay);
       window.removeEventListener('keydown', tryPlay);
       document.removeEventListener('visibilitychange', resumeIfPaused);
-      audio.pause();
-      audio.currentTime = 0;
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
       audioRef.current = null;
     };
   }, []);
