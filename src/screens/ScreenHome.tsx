@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createRoom } from '../firebase/roomService';
-import abcLogo from '../assets/abc-logo.png';
+import abcLogo from '../assets/optimized/abc-logo.webp';
 
 type Props = { hostId: string; onCreated: (roomId: string, code: string) => void };
 

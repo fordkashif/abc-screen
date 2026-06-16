@@ -178,7 +178,7 @@ html, body, #root {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("../assets/abc-tv-background.png");
+  background-image: url("../assets/optimized/abc-tv-background.webp");
   background-size: cover;
   background-position: center;
   opacity: 0.98;
@@ -733,7 +733,7 @@ html, body, #root {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("../assets/abc-tv-background.png");
+  background-image: url("../assets/optimized/abc-tv-background.webp");
   background-size: cover;
   background-position: center;
   opacity: .98;
@@ -1717,7 +1717,7 @@ html, body, #root {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("../assets/abc-tv-background.png");
+  background-image: url("../assets/optimized/abc-tv-background.webp");
   background-size: cover;
   background-position: center;
   opacity: .98;
@@ -2176,7 +2176,7 @@ html, body, #root {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("../assets/abc-tv-background.png");
+  background-image: url("../assets/optimized/abc-tv-background.webp");
   background-size: cover;
   background-position: center;
   opacity: .50;
@@ -2579,7 +2579,7 @@ html, body, #root {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("../assets/abc-tv-background.png");
+  background-image: url("../assets/optimized/abc-tv-background.webp");
   background-size: cover;
   background-position: center;
   opacity: .44;

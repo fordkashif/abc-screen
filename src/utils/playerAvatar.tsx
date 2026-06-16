@@ -1,11 +1,11 @@
 import React from 'react';
 import type { PlayerRecord } from '@abc/shared';
-import avatarDino from '../assets/controller-avatars/dino.png';
-import avatarCat from '../assets/controller-avatars/cat.png';
-import avatarPuppy from '../assets/controller-avatars/puppy.png';
-import avatarRobot from '../assets/controller-avatars/robot.png';
-import avatarUnicorn from '../assets/controller-avatars/unicorn.png';
-import avatarStar from '../assets/controller-avatars/star.png';
+import avatarDino from '../assets/controller-avatars/optimized/dino.webp';
+import avatarCat from '../assets/controller-avatars/optimized/cat.webp';
+import avatarPuppy from '../assets/controller-avatars/optimized/puppy.webp';
+import avatarRobot from '../assets/controller-avatars/optimized/robot.webp';
+import avatarUnicorn from '../assets/controller-avatars/optimized/unicorn.webp';
+import avatarStar from '../assets/controller-avatars/optimized/star.webp';
 
 const AVATAR_COLORS = ['#58cc02', '#1cb0f6', '#ce82ff', '#ff9600', '#ff4b4b', '#ffd900', '#0d91d0', '#a560ed'];
 

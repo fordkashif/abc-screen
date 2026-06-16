@@ -1,7 +1,7 @@
 import React from 'react';
 import QRCode from 'react-qr-code';
 import type { PlayerRecord, RoomRecord } from '@abc/shared';
-import abcLogo from '../assets/abc-logo.png';
+import abcLogo from '../assets/optimized/abc-logo.webp';
 import { avatarColor, PlayerAvatar } from '../utils/playerAvatar';
 
 const CONTROLLER_URL = import.meta.env.VITE_CONTROLLER_URL ?? 'http://localhost:5174';

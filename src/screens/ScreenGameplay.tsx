@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { PlayerRecord, RoomRecord } from '@abc/shared';
 import { ANSWER_KEYS, CATEGORY_LABELS } from '@abc/shared';
-import abcLogo from '../assets/abc-logo.png';
+import abcLogo from '../assets/optimized/abc-logo.webp';
 import { PlayerAvatar } from '../utils/playerAvatar';
 
 type Props = {
