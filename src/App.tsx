@@ -1,15 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
-import { createRoom, resetRoomForReplay } from './firebase/roomService';
-import { ScreenHome } from './screens/ScreenHome';
-import { ScreenLobby } from './screens/ScreenLobby';
-import { ScreenGameplay } from './screens/ScreenGameplay';
-import { ScreenResults } from './screens/ScreenResults';
-import { ScreenSummary } from './screens/ScreenSummary';
+import { resetRoomForReplay } from './firebase/roomService';
 import type { RoomRecord, PlayerRecord } from '@abc/shared';
 import backgroundLoop from './assets/loop.ogg';
+
+const ScreenHome = lazy(() => import('./screens/ScreenHome').then(module => ({ default: module.ScreenHome })));
+const ScreenLobby = lazy(() => import('./screens/ScreenLobby').then(module => ({ default: module.ScreenLobby })));
+const ScreenGameplay = lazy(() => import('./screens/ScreenGameplay').then(module => ({ default: module.ScreenGameplay })));
+const ScreenResults = lazy(() => import('./screens/ScreenResults').then(module => ({ default: module.ScreenResults })));
+const ScreenSummary = lazy(() => import('./screens/ScreenSummary').then(module => ({ default: module.ScreenSummary })));
 
 function readScaleOverride(): number | null {
   const raw = new URLSearchParams(window.location.search).get('scale');
@@ -128,19 +129,40 @@ export default function App() {
   }
 
   let screen: React.ReactNode;
+  const loadingFallback = <div className="loading-screen">Loading...</div>;
 
   if (!hostId) {
-    screen = <div className="loading-screen">Loading...</div>;
+    screen = loadingFallback;
   } else if (!roomId || !room) {
-    screen = <ScreenHome hostId={hostId} onCreated={handleCreated} />;
+    screen = (
+      <Suspense fallback={loadingFallback}>
+        <ScreenHome hostId={hostId} onCreated={handleCreated} />
+      </Suspense>
+    );
   } else if (room.status === 'waiting') {
-    screen = <ScreenLobby room={room} players={players} roomCode={roomCode} />;
+    screen = (
+      <Suspense fallback={loadingFallback}>
+        <ScreenLobby room={room} players={players} roomCode={roomCode} />
+      </Suspense>
+    );
   } else if (room.status === 'playing') {
-    screen = <ScreenGameplay room={room} players={players} />;
+    screen = (
+      <Suspense fallback={loadingFallback}>
+        <ScreenGameplay room={room} players={players} />
+      </Suspense>
+    );
   } else if (room.status === 'round_ended') {
-    screen = <ScreenResults room={room} players={players} />;
+    screen = (
+      <Suspense fallback={loadingFallback}>
+        <ScreenResults room={room} players={players} />
+      </Suspense>
+    );
   } else if (room.status === 'finished') {
-    screen = <ScreenSummary players={players} onPlayAgain={handlePlayAgain} onBackHome={handleBackHome} />;
+    screen = (
+      <Suspense fallback={loadingFallback}>
+        <ScreenSummary players={players} onPlayAgain={handlePlayAgain} onBackHome={handleBackHome} />
+      </Suspense>
+    );
   } else {
     screen = <div className="loading-screen">Unknown state</div>;
   }
