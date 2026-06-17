@@ -1,5 +1,5 @@
 import React from 'react';
-import type { PlayerRecord, RoomRecord } from '@abc/shared';
+import type { PlayerRecord, RoomRecord, AnswerCategory } from '@abc/shared';
 import { ANSWER_KEYS, CATEGORY_LABELS } from '@abc/shared';
 import abcLogo from '../assets/optimized/abc-logo.webp';
 import { PlayerAvatar } from '../utils/playerAvatar';
@@ -10,6 +10,18 @@ type Props = {
 };
 
 const CAT_COLORS = ['#ffe4d6', '#ffe1ee', '#fff1c5', '#dff8ff', '#ffe4c0', '#f0e3ff'];
+
+function getAnswerReviewState(room: RoomRecord, playerId: string, category: AnswerCategory, rawAnswer: string) {
+  const answer = rawAnswer.trim();
+  if (!answer) return { label: 'Blank', valid: false };
+
+  const override = room.answerOverrides?.[`${playerId}:${category}`];
+  if (override === true) return { label: 'Accepted', valid: true };
+  if (override === false) return { label: 'Rejected', valid: false };
+
+  const startsRight = answer[0]?.toLowerCase() === room.currentLetter.toLowerCase();
+  return startsRight ? { label: 'Accepted', valid: true } : { label: 'Wrong letter', valid: false };
+}
 
 export function ScreenResults({ room, players }: Props) {
   const sorted = Object.entries(players).sort(([, a], [, b]) => b.score - a.score);
@@ -65,10 +77,7 @@ export function ScreenResults({ room, players }: Props) {
                     </td>
                     {visiblePlayers.map(([pid, p]) => {
                       const answer = p.answers?.[cat] ?? '';
-                      const okey = `${pid}:${cat}`;
-                      const override = room.answerOverrides?.[okey];
-                      const startsRight = answer && answer[0]?.toLowerCase() === room.currentLetter.toLowerCase();
-                      const isValid = override !== undefined ? override : (startsRight && !!answer);
+                      const reviewState = getAnswerReviewState(room, pid, cat, answer);
 
                       if (!answer) {
                         return <td key={pid}><span className="rr-dash">-</span></td>;
@@ -76,7 +85,8 @@ export function ScreenResults({ room, players }: Props) {
 
                       return (
                         <td key={pid}>
-                          <span className={`rr-answer-pill ${isValid ? '' : 'invalid'}`}>{answer}</span>
+                          <span className={`rr-answer-pill ${reviewState.valid ? '' : 'invalid'}`}>{answer}</span>
+                          <span className={`rr-answer-meta ${reviewState.valid ? 'valid' : 'invalid'}`}>{reviewState.label}</span>
                         </td>
                       );
                     })}
@@ -96,6 +106,7 @@ export function ScreenResults({ room, players }: Props) {
             <p className="rr-next-subtitle">
               {isLastRound ? `${dealerName} will end the game` : `${dealerName} will start the next round`}
             </p>
+            <p className="rr-review-note">Green answers were accepted. Red answers were rejected or used the wrong letter.</p>
           </div>
         </div>
         <div className="rr-next-button">{isLastRound ? 'Final scores' : 'Waiting on dealer'}</div>

@@ -211,7 +211,7 @@ export default function App() {
         <ScreenLobby room={room} players={players} roomCode={roomCode} />
       </Suspense>
     );
-  } else if (room.status === 'playing') {
+  } else if (room.status === 'playing' || room.status === 'paused') {
     screen = (
       <Suspense fallback={loadingFallback}>
         <ScreenGameplay room={room} players={players} />

@@ -3709,3 +3709,65 @@ html, body, #root {
   object-fit: contain;
   padding: 0;
 }
+.gp-state-banner {
+  position: absolute;
+  top: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: min(760px, calc(100% - 96px));
+  padding: 22px 28px;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 20px 50px rgba(66, 79, 130, 0.18);
+  text-align: center;
+}
+
+.gp-state-kicker {
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7e60e5;
+}
+
+.gp-state-title {
+  margin-top: 0.45rem;
+  font-size: 2.1rem;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.gp-state-copy {
+  margin: 0.55rem auto 0;
+  max-width: 580px;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.rr-answer-meta {
+  display: inline-flex;
+  margin-top: 0.35rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.rr-answer-meta.valid {
+  background: #e7ffe6;
+  color: #259f18;
+}
+
+.rr-answer-meta.invalid {
+  background: #ffe8ec;
+  color: #cf4456;
+}
+
+.rr-review-note {
+  margin: 0.45rem 0 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+}
