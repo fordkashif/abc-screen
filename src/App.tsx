@@ -12,6 +12,33 @@ const ScreenGameplay = lazy(() => import('./screens/ScreenGameplay').then(module
 const ScreenResults = lazy(() => import('./screens/ScreenResults').then(module => ({ default: module.ScreenResults })));
 const ScreenSummary = lazy(() => import('./screens/ScreenSummary').then(module => ({ default: module.ScreenSummary })));
 
+type StoredScreenSession = {
+  roomId: string;
+  roomCode: string;
+};
+
+const SCREEN_SESSION_KEY = 'abc-screen-session';
+
+function readStoredSession(): StoredScreenSession | null {
+  try {
+    const raw = localStorage.getItem(SCREEN_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredScreenSession>;
+    if (!parsed.roomId || !parsed.roomCode) return null;
+    return { roomId: parsed.roomId, roomCode: parsed.roomCode };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredSession(session: StoredScreenSession) {
+  localStorage.setItem(SCREEN_SESSION_KEY, JSON.stringify(session));
+}
+
+function clearStoredSession() {
+  localStorage.removeItem(SCREEN_SESSION_KEY);
+}
+
 function readScaleOverride(): number | null {
   const raw = new URLSearchParams(window.location.search).get('scale');
   if (!raw) return null;
@@ -53,11 +80,13 @@ function useScreenScale() {
 }
 
 export default function App() {
+  const storedSession = readStoredSession();
   const [hostId, setHostId] = useState<string | null>(null);
-  const [roomId, setRoomId] = useState<string | null>(null);
-  const [roomCode, setRoomCode] = useState('');
+  const [roomId, setRoomId] = useState<string | null>(storedSession?.roomId ?? null);
+  const [roomCode, setRoomCode] = useState(storedSession?.roomCode ?? '');
   const [room, setRoom] = useState<RoomRecord | null>(null);
   const [players, setPlayers] = useState<Record<string, PlayerRecord>>({});
+  const [roomResolved, setRoomResolved] = useState(() => storedSession ? false : true);
   const screenScale = useScreenScale();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -121,9 +150,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    setRoomResolved(!roomId);
     if (!roomId) return;
     const u1 = onSnapshot(doc(db, 'rooms', roomId), s =>
-      setRoom(s.exists() ? (s.data() as RoomRecord) : null),
+      {
+        setRoomResolved(true);
+        setRoom(s.exists() ? (s.data() as RoomRecord) : null);
+      },
     );
     const u2 = onSnapshot(collection(db, 'rooms', roomId, 'players'), s => {
       const m: Record<string, PlayerRecord> = {};
@@ -133,9 +166,18 @@ export default function App() {
     return () => { u1(); u2(); };
   }, [roomId]);
 
+  useEffect(() => {
+    if (!roomId || !roomResolved || room) return;
+    clearStoredSession();
+    setRoomId(null);
+    setRoomCode('');
+    setPlayers({});
+  }, [roomId, roomResolved, room]);
+
   function handleCreated(id: string, code: string) {
     setRoomId(id);
     setRoomCode(code);
+    writeStoredSession({ roomId: id, roomCode: code });
   }
 
   async function handlePlayAgain() {
@@ -144,6 +186,7 @@ export default function App() {
   }
 
   function handleBackHome() {
+    clearStoredSession();
     setRoomId(null);
     setRoomCode('');
     setRoom(null);
@@ -153,7 +196,7 @@ export default function App() {
   let screen: React.ReactNode;
   const loadingFallback = <div className="loading-screen">Loading...</div>;
 
-  if (!hostId) {
+  if (!hostId || (roomId && !roomResolved)) {
     screen = loadingFallback;
   } else if (!roomId || !room) {
     screen = (
