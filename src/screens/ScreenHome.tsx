@@ -6,6 +6,26 @@ type Props = { hostId: string; onCreated: (roomId: string, code: string) => void
 
 const ROUND_OPTIONS = [3, 5, 7, 10];
 const TIMER_OPTIONS = [30, 60, 90];
+const CREATE_ROOM_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error('create-room-timeout'));
+    }, timeoutMs);
+
+    promise.then(
+      value => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 export function ScreenHome({ hostId, onCreated }: Props) {
   const [screen, setScreen] = useState<'welcome' | 'setup'>('welcome');
@@ -18,10 +38,14 @@ export function ScreenHome({ hostId, onCreated }: Props) {
     setLoading(true);
     setError('');
     try {
-      const { roomId, code } = await createRoom(hostId, { rounds, timer });
+      const { roomId, code } = await withTimeout(
+        createRoom(hostId, { rounds, timer }),
+        CREATE_ROOM_TIMEOUT_MS,
+      );
       onCreated(roomId, code);
     } catch (e) {
-      setError('Could not create room. Check your connection.');
+      console.error('Failed to create room', e);
+      setError('Could not create room. Check Firebase Auth domains and Firestore rules.');
       setLoading(false);
     }
   }
