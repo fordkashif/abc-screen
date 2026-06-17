@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoom } from '../firebase/roomService';
 import abcLogo from '../assets/optimized/abc-logo.webp';
 
@@ -8,42 +8,39 @@ const ROUND_OPTIONS = [3, 5, 7, 10];
 const TIMER_OPTIONS = [30, 60, 90];
 const CREATE_ROOM_TIMEOUT_MS = 12_000;
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error('create-room-timeout'));
-    }, timeoutMs);
-
-    promise.then(
-      value => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      error => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 export function ScreenHome({ hostId, onCreated }: Props) {
   const [screen, setScreen] = useState<'welcome' | 'setup'>('welcome');
   const [rounds, setRounds] = useState(5);
   const [timer, setTimer] = useState(60);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const attemptRef = useRef(0);
+
+  useEffect(() => {
+    if (!loading) return;
+
+    const attemptId = attemptRef.current;
+    const watchdog = window.setTimeout(() => {
+      if (attemptRef.current !== attemptId) return;
+      setError('Could not create room. Firebase createRoom() timed out.');
+      setLoading(false);
+    }, CREATE_ROOM_TIMEOUT_MS);
+
+    return () => window.clearTimeout(watchdog);
+  }, [loading]);
 
   async function handleStart() {
+    const attemptId = attemptRef.current + 1;
+    attemptRef.current = attemptId;
     setLoading(true);
     setError('');
+
     try {
-      const { roomId, code } = await withTimeout(
-        createRoom(hostId, { rounds, timer }),
-        CREATE_ROOM_TIMEOUT_MS,
-      );
+      const { roomId, code } = await createRoom(hostId, { rounds, timer });
+      if (attemptRef.current !== attemptId) return;
       onCreated(roomId, code);
     } catch (e) {
+      if (attemptRef.current !== attemptId) return;
       console.error('Failed to create room', e);
       setError('Could not create room. Check Firebase Auth domains and Firestore rules.');
       setLoading(false);

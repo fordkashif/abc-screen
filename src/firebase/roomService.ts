@@ -1,6 +1,6 @@
 import {
   addDoc, collection, doc, getDocs, serverTimestamp,
-  updateDoc, writeBatch, runTransaction,
+  updateDoc, writeBatch, runTransaction, Timestamp,
 } from 'firebase/firestore';
 import { db } from './config';
 import {
@@ -9,6 +9,8 @@ import {
   ANSWER_KEYS,
 } from '@abc/shared';
 import type { RoomRecord, PlayerRecord, AnswerCategory } from '@abc/shared';
+
+const ROUND_COUNTDOWN_MS = 3_500;
 
 const EMPTY_ANSWERS = { boy: '', girl: '', animal: '', place: '', food: '', thing: '' };
 
@@ -40,6 +42,7 @@ export async function createRoom(
 
 export async function startRoom(roomId: string, hostId: string): Promise<void> {
   const firstLetter = selectNextLetter([], 0);
+  const countdownStart = Timestamp.fromMillis(Date.now() + ROUND_COUNTDOWN_MS);
   const roomRef = doc(db, 'rooms', roomId);
   const playersSnap = await getDocs(collection(db, `rooms/${roomId}/players`));
 
@@ -55,7 +58,8 @@ export async function startRoom(roomId: string, hostId: string): Promise<void> {
       letterHistory: [firstLetter],
       answerOverrides: {},
       roundNumber: 1,
-      roundStartedAt: serverTimestamp(),
+      roundStartedAt: countdownStart,
+      pausedRemainingSec: null,
     });
   });
 
@@ -145,6 +149,7 @@ export async function startNextRound(
 
   const history = room.letterHistory ?? [];
   const letter = selectNextLetter(history, nextRound - 1);
+  const countdownStart = Timestamp.fromMillis(Date.now() + ROUND_COUNTDOWN_MS);
   const playersSnap = await getDocs(collection(db, `rooms/${roomId}/players`));
 
   const batch = writeBatch(db);
@@ -164,7 +169,8 @@ export async function startNextRound(
     currentLetter: letter,
     letterHistory: [...history, letter],
     answerOverrides: {},
-    roundStartedAt: serverTimestamp(),
+    roundStartedAt: countdownStart,
+    pausedRemainingSec: null,
   });
   await batch.commit();
   return { finished: false };
@@ -228,6 +234,7 @@ export async function resetRoomForReplay(roomId: string, fallbackDealerId: strin
     letterHistory: [],
     answerOverrides: {},
     roundStartedAt: serverTimestamp(),
+    pausedRemainingSec: null,
   });
 
   await batch.commit();

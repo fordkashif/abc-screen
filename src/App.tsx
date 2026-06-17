@@ -175,6 +175,7 @@ export default function App() {
   }, [roomId, roomResolved, room]);
 
   function handleCreated(id: string, code: string) {
+    setRoomResolved(false);
     setRoomId(id);
     setRoomCode(code);
     writeStoredSession({ roomId: id, roomCode: code });
