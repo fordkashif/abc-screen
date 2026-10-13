@@ -1,6 +1,6 @@
 import React from 'react';
 import type { PlayerRecord, RoomRecord, AnswerCategory } from '@abc/shared';
-import { ANSWER_KEYS, CATEGORY_LABELS } from '@abc/shared';
+import { ANSWER_KEYS, CATEGORY_LABELS, reviewAnswer } from '@abc/shared';
 import abcLogo from '../assets/optimized/abc-logo.webp';
 import { PlayerAvatar } from '../utils/playerAvatar';
 
@@ -12,15 +12,7 @@ type Props = {
 const CAT_COLORS = ['#ffe4d6', '#ffe1ee', '#fff1c5', '#dff8ff', '#ffe4c0', '#f0e3ff'];
 
 function getAnswerReviewState(room: RoomRecord, playerId: string, category: AnswerCategory, rawAnswer: string) {
-  const answer = rawAnswer.trim();
-  if (!answer) return { label: 'Blank', valid: false };
-
-  const override = room.answerOverrides?.[`${playerId}:${category}`];
-  if (override === true) return { label: 'Accepted', valid: true };
-  if (override === false) return { label: 'Rejected', valid: false };
-
-  const startsRight = answer[0]?.toLowerCase() === room.currentLetter.toLowerCase();
-  return startsRight ? { label: 'Accepted', valid: true } : { label: 'Wrong letter', valid: false };
+  return reviewAnswer(room, playerId, category, rawAnswer);
 }
 
 export function ScreenResults({ room, players }: Props) {
