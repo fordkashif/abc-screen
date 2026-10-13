@@ -1,8 +1,9 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase/config';
 import { resetRoomForReplay } from './firebase/roomService';
+import { HOST_HEARTBEAT_MS, syncServerClock, useReferee } from '@abc/shared';
 import type { RoomRecord, PlayerRecord } from '@abc/shared';
 import backgroundLoop from './assets/loop.ogg';
 
@@ -165,6 +166,26 @@ export default function App() {
     });
     return () => { u1(); u2(); };
   }, [roomId]);
+
+  // The TV checks in every few seconds. While it does, it referees the room:
+  // it ends rounds on time, scores them from the server's copy of everyone's
+  // answers, replaces a missing dealer and ends abandoned games. If the TV
+  // goes quiet, the dealer's phone takes over.
+  const isHost = !!room && !!hostId && room.hostId === hostId;
+  useEffect(() => {
+    if (!roomId || !isHost) return;
+    const roomRef = doc(db, 'rooms', roomId);
+    const beat = () => { void syncServerClock(roomRef, 'hostSeenAt').catch(() => {}); };
+    beat();
+    const id = window.setInterval(beat, HOST_HEARTBEAT_MS);
+    return () => window.clearInterval(id);
+  }, [roomId, isHost]);
+
+  const playerList = useMemo(
+    () => Object.entries(players).map(([id, p]) => ({ id, ...p })),
+    [players],
+  );
+  useReferee({ db, roomId, room, players: playerList, enabled: isHost });
 
   useEffect(() => {
     if (!roomId || !roomResolved || room) return;

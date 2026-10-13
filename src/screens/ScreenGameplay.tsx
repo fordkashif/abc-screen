@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { PlayerRecord, RoomRecord } from '@abc/shared';
-import { ANSWER_KEYS, CATEGORY_LABELS } from '@abc/shared';
+import { ANSWER_KEYS, CATEGORY_LABELS, activePlayersOf, roundTiming, serverNow } from '@abc/shared';
 import abcLogo from '../assets/optimized/abc-logo.webp';
 import { PlayerAvatar } from '../utils/playerAvatar';
 
@@ -10,33 +10,26 @@ type Props = {
 };
 
 export function ScreenGameplay({ room, players }: Props) {
-  const [elapsed, setElapsed] = useState(0);
-  const prevLetter = useRef('');
-
+  // Re-render twice a second so the clock ticks.
+  const [, setTick] = useState(0);
   useEffect(() => {
-    if (prevLetter.current !== room.currentLetter) {
-      prevLetter.current = room.currentLetter;
-      setElapsed(0);
-    }
-  }, [room.currentLetter]);
-
-  useEffect(() => {
-    const startMs = room.roundStartedAt?.toMillis?.() ?? Date.now();
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - startMs) / 1000)), 500);
+    const id = setInterval(() => setTick(t => t + 1), 500);
     return () => clearInterval(id);
-  }, [room.roundStartedAt]);
+  }, []);
 
   const total = room.settings.timer;
-  const countdownLeft = room.roundStartedAt ? Math.max(0, Math.ceil((room.roundStartedAt.toMillis() - Date.now()) / 1000)) : 0;
-  const isCountdown = room.status === 'playing' && countdownLeft > 0;
-  const isPaused = room.status === 'paused';
-  const pausedRemaining = Math.max(0, room.pausedRemainingSec ?? total);
-  const timeLeft = isPaused
-    ? pausedRemaining
-    : Math.max(0, total - Math.max(0, elapsed));
+  const timing = roundTiming(room, serverNow());
+  const countdownLeft = timing.countdownLeft;
+  const isCountdown = timing.phase === 'countdown';
+  const isPaused = timing.phase === 'paused';
+  const timeLeft = timing.timeLeft;
   const isUrgent = !isCountdown && !isPaused && timeLeft <= 10;
   const progressDeg = Math.max(0, Math.min(360, (timeLeft / total) * 360));
-  const playerList = Object.entries(players);
+  // Players who left or whose phones have dropped off don't count toward "submitted".
+  const connected = new Set(
+    activePlayersOf(Object.entries(players).map(([id, p]) => ({ id, ...p })), serverNow()).map(p => p.id),
+  );
+  const playerList = Object.entries(players).filter(([id]) => connected.has(id));
   const submitted = playerList.filter(([, p]) => p.submitted).length;
   const dealerEntry = playerList.find(([id]) => id === room.currentDealerId);
   const dealerName = dealerEntry?.[1]?.name ?? 'Dealer';
