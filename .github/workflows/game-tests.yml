@@ -1,0 +1,119 @@
+name: Game tests
+
+# Runs on every push and pull request to this repo, and when abc-controller
+# changes (its workflow calls this one). Two jobs:
+#  - unit: type-check, build and shared logic tests
+#  - rules: firestore.rules against every write the apps make (emulator)
+#  - play: a full 3-round game with one TV and two phones on the real Firebase project
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      controller_ref:
+        description: abc-controller branch or commit to test with
+        required: false
+        default: main
+  workflow_call:
+    inputs:
+      controller_ref:
+        type: string
+        required: false
+        default: main
+      screen_ref:
+        type: string
+        required: false
+        default: main
+
+concurrency:
+  group: game-tests-${{ github.ref }}-${{ inputs.controller_ref || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fordkashif/abc-screen
+          ref: ${{ inputs.screen_ref || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npx tsc --noEmit -p .
+      - run: npm test
+      - run: npx vite build
+
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fordkashif/abc-screen
+          ref: ${{ inputs.screen_ref || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm install --no-audit --no-fund
+      - name: Rules tests
+        run: |
+          set -o pipefail
+          npm run test:rules 2>&1 | tee rules.log
+      - name: Report rules failures
+        if: failure()
+        run: |
+          # GitHub shows at most 10 annotations of each kind per step, so: failing test
+          # names and totals as errors, and each failure's message as warnings.
+          grep -E "^ *(not ok|# (tests|pass|fail))" rules.log | head -10 | while IFS= read -r line; do echo "::error title=rules::${line}"; done
+          awk '/^ *not ok/{grab=12} grab>0 && /(error|message|expected|actual|code|stack|Expected|FAILED)/{print; grab--} grab>0{grab--}' rules.log \
+            | grep -v "^ *stack" | head -10 | while IFS= read -r line; do echo "::warning title=rules failure::${line}"; done
+
+  play:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: fordkashif/abc-screen
+          ref: ${{ inputs.screen_ref || github.sha }}
+          path: screen
+      - uses: actions/checkout@v4
+        with:
+          repository: fordkashif/abc-controller
+          ref: ${{ inputs.controller_ref || 'main' }}
+          path: controller
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build both apps
+        run: |
+          (cd screen && npm install --no-audit --no-fund && npx vite build)
+          (cd controller && npm install --no-audit --no-fund && npx vite build)
+      - name: Install the test browser
+        run: |
+          cd screen
+          npm install --no-audit --no-fund --no-save playwright@^1.50.0
+          npx playwright install --with-deps chromium
+      - name: Serve both apps
+        run: |
+          (cd screen && npx vite preview --port 4173 --strictPort > ../screen.log 2>&1 &)
+          (cd controller && npx vite preview --port 4174 --strictPort > ../controller.log 2>&1 &)
+          npx --yes wait-on@8 http://localhost:4173 http://localhost:4174
+      - name: Play a full game (TV + 2 phones)
+        run: |
+          set -o pipefail
+          node screen/e2e/play-game.mjs http://localhost:4173 http://localhost:4174 2>&1 | tee play.log
+      - name: Report play test results
+        if: always()
+        run: |
+          # GitHub keeps 10 annotations of each kind per step: errors for failures,
+          # and the last 10 steps of the game as notices.
+          grep -F "[play-test]" play.log | grep -E "FAIL|error" | head -10 | while IFS= read -r line; do echo "::error title=play::${line}"; done || true
+          grep -F "[play-test]" play.log | grep -vE "FAIL|error" | tail -10 | while IFS= read -r line; do echo "::notice title=play::${line}"; done || true
