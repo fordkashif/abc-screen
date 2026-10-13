@@ -115,5 +115,6 @@ jobs:
         run: |
           # GitHub keeps 10 annotations of each kind per step: errors for failures,
           # and the last 10 steps of the game as notices.
-          grep -F "[play-test]" play.log | grep -E "FAIL|error" | head -10 | while IFS= read -r line; do echo "::error title=play::${line}"; done || true
-          grep -F "[play-test]" play.log | grep -vE "FAIL|error" | tail -10 | while IFS= read -r line; do echo "::notice title=play::${line}"; done || true
+          grep -F "[play-test]" play.log | grep -E "FAIL|DIAG" | head -10 | while IFS= read -r line; do echo "::error title=play::${line}"; done || true
+          grep -F "[play-test]" play.log | grep -iE "console|page error" | grep -v DIAG | head -10 | while IFS= read -r line; do echo "::warning title=play console::${line}"; done || true
+          grep -F "[play-test]" play.log | grep -vE "FAIL|DIAG|console|page error" | tail -10 | while IFS= read -r line; do echo "::notice title=play::${line}"; done || true
