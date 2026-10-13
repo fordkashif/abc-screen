@@ -367,7 +367,24 @@ describe('outsiders', () => {
     await assertFails(getDoc(room(db)));
   });
 
-  test('blocked: other collections', async () => {
-    await assertFails(setDoc(doc(as(PLAYER), 'leaderboard', PLAYER), { score: 1 }));
+  test('blocked: anything outside the game and the Expo app', async () => {
+    await assertFails(setDoc(doc(as(PLAYER), 'somethingElse', 'x'), { a: 1 }));
+    await assertFails(getDoc(doc(as(PLAYER), 'somethingElse', 'x')));
+  });
+});
+
+describe('Expo app (same Firebase project)', () => {
+  test('saves your own profile and leaderboard score, reads everyone\'s', async () => {
+    const db = as(PLAYER);
+    await assertSucceeds(setDoc(doc(db, 'users', PLAYER), { name: 'Ben', updatedAt: serverTimestamp() }, { merge: true }));
+    await assertSucceeds(setDoc(doc(db, 'leaderboard', PLAYER), { name: 'Ben', score: 120 }));
+    await assertSucceeds(getDoc(doc(db, 'users', DEALER)));
+    await assertSucceeds(getDoc(doc(db, 'leaderboard', DEALER)));
+  });
+
+  test('blocked: writing someone else\'s profile or score', async () => {
+    const db = as(PLAYER);
+    await assertFails(setDoc(doc(db, 'users', DEALER), { name: 'hacked' }));
+    await assertFails(setDoc(doc(db, 'leaderboard', DEALER), { score: 99999 }));
   });
 });
