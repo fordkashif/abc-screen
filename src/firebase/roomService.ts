@@ -20,7 +20,8 @@ export async function createRoom(
     code,
     status: 'waiting',
     hostId,
-    currentDealerId: hostId,
+    // No dealer until a phone joins; the first player becomes the dealer.
+    currentDealerId: '',
     currentLetter: '',
     roundNumber: 0,
     settings,
