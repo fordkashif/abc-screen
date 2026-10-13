@@ -15,6 +15,10 @@
  * Both apps must be running (CI serves the built apps with vite preview).
  */
 import { chromium, devices } from 'playwright';
+import { readFileSync } from 'node:fs';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously } from 'firebase/auth';
+import { collection, getDocs, getFirestore, limit, query, where } from 'firebase/firestore';
 
 const [tvUrl = 'http://localhost:4173', phoneUrl = 'http://localhost:4174'] = process.argv.slice(2);
 const STEP_TIMEOUT = 45_000;
@@ -38,7 +42,9 @@ async function newSession(name, options) {
   const page = await context.newPage();
   page.setDefaultTimeout(STEP_TIMEOUT);
   page.on('pageerror', error => log(`${name} page error: ${error.message}`));
-  page.on('console', msg => { if (msg.type() === 'error' || msg.text().includes('[referee]')) log(`${name} console: ${msg.text()}`); });
+  page.on('console', msg => {
+    if (msg.type() === 'error' || msg.type() === 'warning' || msg.text().includes('[referee]')) log(`${name} console ${msg.type()}: ${msg.text().slice(0, 240)}`);
+  });
   return { name, context, page };
 }
 
@@ -103,11 +109,51 @@ async function advance(dealer) {
   throw new Error('could not move past the results screen');
 }
 
+/** On failure: read the room straight from Firestore, to see whether the game or the screens got stuck. */
+async function dumpRoom(code) {
+  try {
+    const env = Object.fromEntries(readFileSync(new URL('../.env.local', import.meta.url), 'utf8')
+      .split('\n').map(line => line.match(/^(VITE_[A-Z_]+)=(.*)$/)).filter(Boolean).map(m => [m[1], m[2].trim()]));
+    const app = initializeApp({
+      apiKey: env.VITE_FIREBASE_API_KEY, authDomain: env.VITE_FIREBASE_AUTH_DOMAIN, projectId: env.VITE_FIREBASE_PROJECT_ID,
+      appId: env.VITE_FIREBASE_APP_ID,
+    }, 'diagnostics');
+    await signInAnonymously(getAuth(app));
+    const db = getFirestore(app);
+    const rooms = await getDocs(query(collection(db, 'rooms'), where('code', '==', code), limit(1)));
+    if (rooms.empty) return log(`DIAG room ${code} not found`);
+    const room = rooms.docs[0];
+    const r = room.data();
+    const ms = t => (t?.toMillis ? `${Math.round((Date.now() - t.toMillis()) / 1000)}s ago` : String(t));
+    log(`DIAG room status=${r.status} round=${r.roundNumber} letter=${r.currentLetter} dealer=${r.currentDealerId?.slice(0, 6)} host=${r.hostId?.slice(0, 6)} hostSeen=${ms(r.hostSeenAt)} started=${ms(r.roundStartedAt)} closeReq=${ms(r.roundCloseRequestedAt)} call=${JSON.stringify({ speed: r.letterCall?.speed, by: r.letterCall?.stoppedBy?.slice?.(0, 6), letter: r.letterCall?.letter })}`);
+    const players = await getDocs(collection(db, 'rooms', room.id, 'players'));
+    log(`DIAG players ${players.docs.map(d => { const p = d.data(); return `${p.name}(${d.id.slice(0, 6)}) submitted=${p.submitted} answersRound=${p.answersRound} score=${p.score} scoredRound=${p.scoredRound} seen=${ms(p.lastSeenAt)} answers=${JSON.stringify(p.answers)}`; }).join(' ; ')}`);
+  } catch (error) {
+    log(`DIAG could not read the room: ${error.message}`);
+  }
+}
+
+async function dumpScreens(sessions) {
+  for (const { name, page, context } of sessions) {
+    try {
+      if (page.isClosed()) continue;
+      const text = (await page.locator('body').innerText({ timeout: 3_000 })).replace(/\s+/g, ' ').slice(0, 220);
+      log(`DIAG ${name} screen: ${text}`);
+      const referee = await page.evaluate(() => globalThis.__abcReferee ?? null).catch(() => null);
+      if (referee) log(`DIAG ${name} referee: ${JSON.stringify({ ...referee, ageMs: Date.now() - referee.at })}`);
+    } catch { /* closed */ }
+    void context;
+  }
+}
+
 let exitCode = 0;
+let roomCode = '';
+let sessions = [];
 try {
   const tv = await newSession('TV', { viewport: { width: 1600, height: 900 } });
   const ana = await newSession('Ana', { ...phoneDevice });
   const ben = await newSession('Ben', { ...phoneDevice });
+  sessions = [tv, ana, ben];
 
   // TV creates a 3-round game.
   await tv.page.goto(tvUrl);
@@ -117,6 +163,7 @@ try {
   await tv.page.getByRole('button', { name: /START NEW GAME/ }).click();
   const codeLabel = await tv.page.locator('.lobby-room-code').getAttribute('aria-label');
   const code = codeLabel.replace('Room code ', '').trim();
+  roomCode = code;
   check(/^[A-Z0-9]{6}$/.test(code), `TV created room ${code}`);
 
   // Phones join. The first to join becomes dealer and starts the game.
@@ -170,6 +217,8 @@ try {
   // Keep the first lines of Playwright's message: they name the step and the element.
   const detail = String(error.message).split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4).join(' | ');
   log(`FAILED: ${detail}`);
+  await dumpScreens(sessions);
+  if (roomCode) await dumpRoom(roomCode);
 } finally {
   await browser.close();
   const passed = results.filter(r => r.ok).length;
