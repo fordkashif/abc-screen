@@ -1,0 +1,33 @@
+name: Live check
+
+# Plays a full game (TV + 2 phones) against the live production sites.
+# Run it from the Actions tab, or push a branch named live-check/<anything>.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['live-check/**']
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: |
+          npm install --no-audit --no-fund --no-save playwright@^1.50.0
+          npx playwright install --with-deps chromium
+      - name: Play a full game on the live sites
+        run: |
+          set -o pipefail
+          node e2e/play-game.mjs https://abc-fastorslow-screen.vercel.app https://abc-fastorslow-controller.vercel.app 2>&1 | tee play.log
+      - name: Report results
+        if: always()
+        run: |
+          grep -F "[play-test]" play.log | grep -E "FAIL|DIAG" | head -10 | while IFS= read -r line; do echo "::error title=live::${line}"; done || true
+          grep -F "[play-test]" play.log | grep -iE "console|page error" | grep -v DIAG | head -10 | while IFS= read -r line; do echo "::warning title=live console::${line}"; done || true
+          grep -F "[play-test]" play.log | grep -vE "FAIL|DIAG|console|page error" | tail -10 | while IFS= read -r line; do echo "::notice title=live::${line}"; done || true
