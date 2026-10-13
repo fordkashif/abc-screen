@@ -1,0 +1,173 @@
+rules_version = '2';
+
+// Firestore rules for ABC Fast or Slow (TV + phone).
+//
+// Goal: only people in a room can change it, each player can only edit their
+// own answers while a round is open, and only the TV (host) or the dealer can
+// touch scores and approvals. Players in the same room are still trusted to a
+// degree (a determined player could make themselves dealer); making it fully
+// cheat-proof would need the scoring to run in Cloud Functions.
+//
+// Every write the apps make is listed in rules-tests/firestore.rules.test.ts.
+// Run those tests after changing this file (see README).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function roomPath(roomId) {
+      return /databases/$(database)/documents/rooms/$(roomId);
+    }
+
+    function playerPath(roomId, playerId) {
+      return /databases/$(database)/documents/rooms/$(roomId)/players/$(playerId);
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    match /rooms/{roomId} {
+      function isHost() {
+        return resource.data.hostId == request.auth.uid;
+      }
+
+      function isDealer() {
+        return resource.data.currentDealerId == request.auth.uid;
+      }
+
+      // Checked against the state after the write, so joining (which creates
+      // the player and updates the room in one transaction) counts.
+      function isMember() {
+        return existsAfter(playerPath(roomId, request.auth.uid));
+      }
+
+      // Anyone in the room may take the dealer role for themselves (first to
+      // join, or replacing a dealer who dropped off). Only the host or the
+      // current dealer may hand it to someone else.
+      function dealerChangeOk() {
+        return !('currentDealerId' in changedKeys())
+          || isHost()
+          || isDealer()
+          || request.resource.data.currentDealerId == request.auth.uid;
+      }
+
+      // What a player who is neither host nor dealer may change.
+      function playerRoomUpdateOk() {
+        let keys = changedKeys();
+        let next = request.resource.data;
+        return dealerChangeOk() && (
+          // Take the dealer role.
+          keys.hasOnly(['currentDealerId'])
+          // End the game when leaving it.
+          || (keys.hasOnly(['status', 'currentDealerId']) && next.status == 'finished')
+          // Hit STOP during the fast-or-slow call.
+          || (resource.data.status == 'calling'
+              && next.status == 'playing'
+              && next.letterCall.stoppedBy == request.auth.uid
+              && keys.hasOnly([
+                'status', 'letterCall', 'currentLetter', 'letterHistory',
+                'roundStartedAt', 'answerOverrides', 'roundCloseRequestedAt', 'pausedRemainingSec',
+              ]))
+        );
+      }
+
+      allow get, list: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.hostId == request.auth.uid
+        && request.resource.data.status == 'waiting';
+
+      allow update: if signedIn()
+        && !changedKeys().hasAny(['code', 'hostId', 'createdAt'])
+        && (
+          isHost()
+          || (isMember() && isDealer() && !changedKeys().hasAny(['hostSeenAt']))
+          || (isMember() && playerRoomUpdateOk())
+        );
+
+      allow delete: if signedIn() && isHost();
+
+      match /players/{playerId} {
+        function room() {
+          return get(roomPath(roomId)).data;
+        }
+
+        function isSelf() {
+          return playerId == request.auth.uid;
+        }
+
+        function isRoomHost() {
+          return room().hostId == request.auth.uid;
+        }
+
+        function isRoomDealer() {
+          return room().currentDealerId == request.auth.uid
+            && exists(playerPath(roomId, request.auth.uid));
+        }
+
+        function isRoomMember() {
+          return exists(playerPath(roomId, request.auth.uid));
+        }
+
+        function emptyAnswers() {
+          return { 'boy': '', 'girl': '', 'animal': '', 'place': '', 'food': '', 'thing': '' };
+        }
+
+        // A player editing their own document. Answers only while a round is
+        // open and only for the current round, so nothing changes after scoring.
+        function selfUpdateOk() {
+          let keys = changedKeys();
+          let r = room();
+          return keys.hasOnly([
+              'name', 'avatarId', 'lastSeenAt', 'leftAt', 'connectionState',
+              'answers', 'answersRound', 'submitted', 'ready', 'roundReady', 'isDealer',
+            ])
+            && (
+              !keys.hasAny(['answers', 'answersRound', 'submitted'])
+              || ((r.status == 'playing' || r.status == 'paused')
+                  && request.resource.data.answersRound == r.roundNumber)
+            );
+        }
+
+        // The dealer resetting players for a new round and writing scores.
+        // Other players' answers can only be cleared, never filled in.
+        function dealerUpdateOk() {
+          let keys = changedKeys();
+          let next = request.resource.data;
+          return keys.hasOnly([
+              'submitted', 'answers', 'answersRound', 'roundScore', 'scoredRound',
+              'score', 'ready', 'roundReady', 'connectionState', 'isDealer',
+            ])
+            && (!('answers' in keys) || next.answers == emptyAnswers())
+            && (!('submitted' in keys) || next.submitted == false);
+        }
+
+        allow get, list: if signedIn();
+
+        allow create: if signedIn()
+          && isSelf()
+          && room().status == 'waiting'
+          && request.resource.data.score == 0
+          && request.resource.data.submitted == false;
+
+        allow update: if signedIn() && (
+          isRoomHost()
+          || (isSelf() && selfUpdateOk())
+          || (isRoomDealer() && dealerUpdateOk())
+          // Any player may clear another's dealer flag when the role moves.
+          || (isRoomMember() && changedKeys().hasOnly(['isDealer']))
+        );
+
+        allow delete: if signedIn() && (isSelf() || isRoomHost());
+      }
+    }
+
+    // Everything else is closed. The old Expo app's collections (users,
+    // leaderboard) are not used by the TV + phone game; add rules for them
+    // here if that app shares this Firebase project and is still in use.
+  }
+}
