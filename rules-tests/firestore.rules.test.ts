@@ -310,12 +310,12 @@ describe('players', () => {
     await assertFails(updateDoc(player(as(PLAYER), PLAYER), { score: 9999 }));
   });
 
-  test('blocked: approving answers or ending the round as a non-dealer', async () => {
+  test('blocked: approving answers, rescoring or restarting the round as a non-dealer', async () => {
     await seed({ ...playing, status: 'round_ended' });
     const db = as(PLAYER);
     await assertFails(updateDoc(room(db), { [`answerOverrides.${PLAYER}:boy`]: true }));
     await assertFails(scoreRoundOnServer(db, ROOM, 1, 'round_ended', false));
-    await assertFails(updateDoc(room(db), { status: 'round_ended' }));
+    await assertFails(updateDoc(room(db), { status: 'playing' })); // restarting the round
   });
 
   test('takes over as dealer when the dealer is gone (fallback referee)', async () => {

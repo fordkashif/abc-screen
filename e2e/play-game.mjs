@@ -83,8 +83,12 @@ async function answerAndSubmit(phone, answers) {
   await page.locator('.controller-play-submit').click();
 }
 
-async function roundPoints(phone) {
-  const text = await phone.page.locator('.controller-results-score-points').textContent({ timeout: 90_000 });
+/** The player's running total on the results screen (dealer: score card; others: their leaderboard row). */
+async function totalScore(phone) {
+  const dealerTotal = phone.page.locator('.controller-results-score-total');
+  const myRow = phone.page.locator('.controller-results-leaderboard-row.me .controller-results-leaderboard-score');
+  await dealerTotal.or(myRow).first().waitFor({ timeout: 90_000 });
+  const text = (await dealerTotal.isVisible()) ? await dealerTotal.textContent() : await myRow.first().textContent();
   return Number(text.replace(/[^0-9]/g, ''));
 }
 
@@ -130,8 +134,8 @@ try {
   let letter = await callLetter(ana, ben, 'fast');
   await answerAndSubmit(ana, { 0: `${letter}ex`, 1: `${letter}ola` }); // boy shared, girl unique
   await answerAndSubmit(ben, { 0: `${letter}ex`, 2: 'Zzzz' }); // boy shared, animal junk
-  check((await roundPoints(ana)) === 150, 'round 1: Ana scores 150 (shared 50 + unique 100)');
-  check((await roundPoints(ben)) === 50, 'round 1: Ben scores 50 (shared answer only; junk and wrong letter ignored)');
+  check((await totalScore(ana)) === 150, 'round 1: Ana scores 150 (shared 50 + unique 100)');
+  check((await totalScore(ben)) === 50, 'round 1: Ben scores 50 (shared answer only; junk and wrong letter ignored)');
   await advance(ana);
 
   // ── Round 2: dealer rotates to Ben (SLOW), Ana hits STOP ──
@@ -140,8 +144,8 @@ try {
   letter = await callLetter(ben, ana, 'slow');
   await answerAndSubmit(ana, { 2: `${letter}abbit` });
   await answerAndSubmit(ben, { 3: `${letter}ville`, 4: `${letter}ruit` });
-  check((await roundPoints(ana)) === 100, 'round 2: Ana scores 100');
-  check((await roundPoints(ben)) === 200, 'round 2: Ben scores 200');
+  check((await totalScore(ana)) === 250, 'round 2: Ana +100, total 250');
+  check((await totalScore(ben)) === 250, 'round 2: Ben +200, total 250');
   await advance(ben);
 
   // ── Round 3: TV closes. Ana deals and her phone referees. ──
@@ -152,8 +156,8 @@ try {
   letter = await callLetter(ana, ben, 'fast');
   await answerAndSubmit(ana, { 5: `${letter}hing` });
   await answerAndSubmit(ben, { 5: `${letter}ool` });
-  check((await roundPoints(ana)) === 100, 'round 3 (TV closed): Ana scores 100, scored by her phone');
-  check((await roundPoints(ben)) === 100, 'round 3 (TV closed): Ben scores 100');
+  check((await totalScore(ana)) === 350, 'round 3 (TV closed): Ana +100, total 350, scored by her phone');
+  check((await totalScore(ben)) === 350, 'round 3 (TV closed): Ben +100, total 350');
   await advance(ana);
 
   // Final scores: Ana 150+100+100 = 350, Ben 50+200+100 = 350.
