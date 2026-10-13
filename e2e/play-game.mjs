@@ -139,6 +139,8 @@ async function dumpScreens(sessions) {
       if (page.isClosed()) continue;
       const text = (await page.locator('body').innerText({ timeout: 3_000 })).replace(/\s+/g, ' ').slice(0, 220);
       log(`DIAG ${name} screen: ${text}`);
+      const referee = await page.evaluate(() => globalThis.__abcReferee ?? null).catch(() => null);
+      if (referee) log(`DIAG ${name} referee: ${JSON.stringify({ ...referee, ageMs: Date.now() - referee.at })}`);
     } catch { /* closed */ }
     void context;
   }
