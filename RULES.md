@@ -5,7 +5,7 @@
 - Players can only edit their own document, and their answers only while a round is open.
 - Only the TV (host) or the dealer can change scores, approvals, pauses and round flow.
 - Any player can hit STOP during the fast-or-slow call, but only in their own name.
-- Everything outside `rooms` is closed. If the old Expo app shares this Firebase project, its `users` and `leaderboard` collections are blocked too.
+- The Expo app keeps working: each player can write only their own `users/{uid}` and `leaderboard/{uid}` document. Everything else outside `rooms` is closed.
 
 ## Test before deploying
 

@@ -169,8 +169,19 @@ service cloud.firestore {
       }
     }
 
-    // Everything else is closed. The old Expo app's collections (users,
-    // leaderboard) are not used by the TV + phone game; add rules for them
-    // here if that app shares this Firebase project and is still in use.
+    // The Expo app (same Firebase project) keeps working: each player's own
+    // profile and leaderboard entry, readable by any signed-in player for the
+    // leaderboard and names.
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && userId == request.auth.uid;
+    }
+
+    match /leaderboard/{userId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && userId == request.auth.uid;
+    }
+
+    // Everything else is closed.
   }
 }
