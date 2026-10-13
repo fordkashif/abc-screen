@@ -1,6 +1,7 @@
 import React from 'react';
 import QRCode from 'react-qr-code';
 import type { PlayerRecord, RoomRecord } from '@abc/shared';
+import { serverNow } from '@abc/shared';
 import abcLogo from '../assets/optimized/abc-logo.webp';
 import { avatarColor, PlayerAvatar } from '../utils/playerAvatar';
 
@@ -17,7 +18,7 @@ const STALE_MS = 35_000;
 function isOnline(p: PlayerRecord): boolean {
   if (!p.lastSeenAt) return true;
   const ts = p.lastSeenAt as { toMillis: () => number };
-  return Date.now() - ts.toMillis() < STALE_MS;
+  return serverNow() - ts.toMillis() < STALE_MS;
 }
 
 export function ScreenLobby({ room, players, roomCode }: Props) {
