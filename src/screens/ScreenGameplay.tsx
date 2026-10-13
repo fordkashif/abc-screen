@@ -23,6 +23,12 @@ export function ScreenGameplay({ room, players }: Props) {
   const isCountdown = timing.phase === 'countdown';
   const isPaused = timing.phase === 'paused';
   const timeLeft = timing.timeLeft;
+  const stoppedBy = room.letterCall?.stoppedBy;
+  const stopLabel = !stoppedBy
+    ? 'Get ready'
+    : stoppedBy === 'auto'
+      ? 'Nobody hit STOP'
+      : `${players[stoppedBy]?.name ?? 'Someone'} hit STOP!`;
   const isUrgent = !isCountdown && !isPaused && timeLeft <= 10;
   const progressDeg = Math.max(0, Math.min(360, (timeLeft / total) * 360));
   // Players who left or whose phones have dropped off don't count toward "submitted".
@@ -41,7 +47,7 @@ export function ScreenGameplay({ room, players }: Props) {
 
       {(isCountdown || isPaused) && (
         <section className="gp-state-banner" aria-live="polite">
-          <div className="gp-state-kicker">{isPaused ? 'Round paused' : 'Get ready'}</div>
+          <div className="gp-state-kicker">{isPaused ? 'Round paused' : stopLabel}</div>
           <div className="gp-state-title">
             {isPaused ? 'Waiting for the dealer to resume play' : `Round starts in ${countdownLeft}`}
           </div>

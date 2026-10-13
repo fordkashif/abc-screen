@@ -9,6 +9,7 @@ import backgroundLoop from './assets/loop.ogg';
 
 const ScreenHome = lazy(() => import('./screens/ScreenHome').then(module => ({ default: module.ScreenHome })));
 const ScreenLobby = lazy(() => import('./screens/ScreenLobby').then(module => ({ default: module.ScreenLobby })));
+const ScreenCalling = lazy(() => import('./screens/ScreenCalling').then(module => ({ default: module.ScreenCalling })));
 const ScreenGameplay = lazy(() => import('./screens/ScreenGameplay').then(module => ({ default: module.ScreenGameplay })));
 const ScreenResults = lazy(() => import('./screens/ScreenResults').then(module => ({ default: module.ScreenResults })));
 const ScreenSummary = lazy(() => import('./screens/ScreenSummary').then(module => ({ default: module.ScreenSummary })));
@@ -230,6 +231,12 @@ export default function App() {
     screen = (
       <Suspense fallback={loadingFallback}>
         <ScreenLobby room={room} players={players} roomCode={roomCode} />
+      </Suspense>
+    );
+  } else if (room.status === 'calling') {
+    screen = (
+      <Suspense fallback={loadingFallback}>
+        <ScreenCalling room={room} players={players} />
       </Suspense>
     );
   } else if (room.status === 'playing' || room.status === 'paused') {

@@ -3771,3 +3771,49 @@ html, body, #root {
   font-weight: 600;
   color: var(--muted);
 }
+
+/* ── Fast-or-slow call ─────────────────────────────────────────────────────── */
+.calling-stage {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 56%;
+  transform: translate(-50%, -50%);
+  width: 340px;
+  height: 400px;
+  display: grid;
+  place-items: center;
+}
+.calling-card {
+  position: relative;
+  z-index: 1;
+  width: 300px;
+  height: 360px;
+  border-radius: 54px;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.02)),
+    linear-gradient(180deg, #b68cff 0%, #8663ef 56%, #6741d8 100%);
+  border: 6px solid rgba(255,255,255,.5);
+  box-shadow: 0 22px 0 #4a21a0, 0 40px 60px rgba(103,65,216,.26), inset 0 3px 0 rgba(255,255,255,.4);
+  color: white;
+  font-size: 230px;
+  line-height: 1;
+  font-weight: 1000;
+  text-shadow: 0 8px 0 rgba(74,33,160,.35);
+}
+.calling-card.idle { animation: callingIdle 2.4s ease-in-out infinite; }
+.calling-card.running.fast { animation: callingFlip .13s ease-out; }
+.calling-card.running.slow { animation: callingFlip .4s ease-out; }
+.calling-card.slow { background: linear-gradient(180deg, #52d0ff 0%, #1cb0f6 62%, #0a91d0 100%); box-shadow: 0 22px 0 #0773a6, 0 40px 60px rgba(10,145,208,.26), inset 0 3px 0 rgba(255,255,255,.4); }
+.calling-card.fast { background: linear-gradient(180deg, #ffb340 0%, #ff9600 62%, #e07800 100%); box-shadow: 0 22px 0 #b35f00, 0 40px 60px rgba(255,150,0,.26), inset 0 3px 0 rgba(255,255,255,.4); }
+.calling-card-shadow { bottom: -10px; }
+@keyframes callingFlip {
+  from { transform: rotateY(70deg) scale(.94); }
+  to   { transform: rotateY(0) scale(1); }
+}
+@keyframes callingIdle {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%      { transform: translateY(-12px) rotate(2deg); }
+}
