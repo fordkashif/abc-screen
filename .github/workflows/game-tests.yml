@@ -69,9 +69,11 @@ jobs:
       - name: Report rules failures
         if: failure()
         run: |
-          # One annotation per failing test (with its error), readable without the full log.
-          grep -nE "not ok|Error|error:|FAILED|expected|PERMISSION_DENIED|at .*rules\.test" rules.log | head -40 | while IFS= read -r line; do echo "::error title=rules::${line}"; done
-          tail -25 rules.log | while IFS= read -r line; do echo "::warning title=rules tail::${line}"; done
+          # GitHub shows at most 10 annotations of each kind per step, so: failing test
+          # names and totals as errors, and each failure's message as warnings.
+          grep -E "^ *(not ok|# (tests|pass|fail))" rules.log | head -10 | while IFS= read -r line; do echo "::error title=rules::${line}"; done
+          awk '/^ *not ok/{grab=12} grab>0 && /(error|message|expected|actual|code|stack|Expected|FAILED)/{print; grab--} grab>0{grab--}' rules.log \
+            | grep -v "^ *stack" | head -10 | while IFS= read -r line; do echo "::warning title=rules failure::${line}"; done
 
   play:
     runs-on: ubuntu-latest
