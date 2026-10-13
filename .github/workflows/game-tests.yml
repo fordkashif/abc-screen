@@ -76,6 +76,13 @@ jobs:
             | grep -v "^ *stack" | head -10 | while IFS= read -r line; do echo "::warning title=rules failure::${line}"; done
 
   play:
+    # Three separate games at once: catches flaky behaviour, and checks
+    # that several rooms can run side by side.
+    strategy:
+      fail-fast: false
+      matrix:
+        game: [1, 2, 3]
+    name: play (game ${{ matrix.game }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
