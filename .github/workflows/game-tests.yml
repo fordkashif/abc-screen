@@ -113,6 +113,7 @@ jobs:
       - name: Report play test results
         if: always()
         run: |
-          grep -E "\[play-test\] (PASS|FAIL|FAILED|.*checks passed|.*page error|.*console)" play.log | head -40 | while IFS= read -r line; do
-            case "$line" in *FAIL*|*error*) echo "::error title=play::${line}";; *) echo "::notice title=play::${line}";; esac
-          done || true
+          # GitHub keeps 10 annotations of each kind per step: errors for failures,
+          # and the last 10 steps of the game as notices.
+          grep -F "[play-test]" play.log | grep -E "FAIL|error" | head -10 | while IFS= read -r line; do echo "::error title=play::${line}"; done || true
+          grep -F "[play-test]" play.log | grep -vE "FAIL|error" | tail -10 | while IFS= read -r line; do echo "::notice title=play::${line}"; done || true

@@ -65,7 +65,8 @@ async function callLetter(dealer, stopper, speed) {
   const stop = stopper.page.locator('.calling-stop-button.live:not([disabled])');
   await stop.waitFor();
   await stopper.page.waitForTimeout(speed === 'slow' ? 1_400 : 600);
-  await stop.click();
+  // The live STOP button pulses non-stop, so it never looks "still" to Playwright.
+  await stop.click({ force: true });
   log(`${stopper.name} hit STOP`);
   const letter = (await dealer.page.locator('.controller-play-letter').textContent()).trim();
   check(/^[A-Z]$/.test(letter), `round letter is a single letter (${letter})`);
@@ -162,7 +163,9 @@ try {
   check(summary.includes('350'), 'game finished; both phones show the final scores (350 each)');
 } catch (error) {
   exitCode = 1;
-  log(`FAILED: ${error.message}`);
+  // Keep the first lines of Playwright's message: they name the step and the element.
+  const detail = String(error.message).split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4).join(' | ');
+  log(`FAILED: ${detail}`);
 } finally {
   await browser.close();
   const passed = results.filter(r => r.ok).length;
