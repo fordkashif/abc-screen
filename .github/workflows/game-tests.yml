@@ -62,7 +62,16 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm install --no-audit --no-fund
-      - run: npm run test:rules
+      - name: Rules tests
+        run: |
+          set -o pipefail
+          npm run test:rules 2>&1 | tee rules.log
+      - name: Report rules failures
+        if: failure()
+        run: |
+          # One annotation per failing test (with its error), readable without the full log.
+          grep -nE "not ok|Error|error:|FAILED|expected|PERMISSION_DENIED|at .*rules\.test" rules.log | head -40 | while IFS= read -r line; do echo "::error title=rules::${line}"; done
+          tail -25 rules.log | while IFS= read -r line; do echo "::warning title=rules tail::${line}"; done
 
   play:
     runs-on: ubuntu-latest
@@ -96,4 +105,12 @@ jobs:
           (cd controller && npx vite preview --port 4174 --strictPort > ../controller.log 2>&1 &)
           npx --yes wait-on@8 http://localhost:4173 http://localhost:4174
       - name: Play a full game (TV + 2 phones)
-        run: node screen/e2e/play-game.mjs http://localhost:4173 http://localhost:4174
+        run: |
+          set -o pipefail
+          node screen/e2e/play-game.mjs http://localhost:4173 http://localhost:4174 2>&1 | tee play.log
+      - name: Report play test results
+        if: always()
+        run: |
+          grep -E "\[play-test\] (PASS|FAIL|FAILED|.*checks passed|.*page error|.*console)" play.log | head -40 | while IFS= read -r line; do
+            case "$line" in *FAIL*|*error*) echo "::error title=play::${line}";; *) echo "::notice title=play::${line}";; esac
+          done || true
