@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "tsx --test shared/src/*.test.ts",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-abc-rules 'tsx --test rules-tests/*.test.ts'"
+    "test:rules": "npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-abc-rules 'tsx --test rules-tests/*.test.ts'"
   },
   "dependencies": {
     "firebase": "^12.14.0",

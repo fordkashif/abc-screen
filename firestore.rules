@@ -5,8 +5,9 @@ rules_version = '2';
 // Goal: only people in a room can change it, each player can only edit their
 // own answers while a round is open, and only the TV (host) or the dealer can
 // touch scores and approvals. Players in the same room are still trusted to a
-// degree (a determined player could make themselves dealer); making it fully
-// cheat-proof would need the scoring to run in Cloud Functions.
+// degree: a determined player could make themselves dealer, and whoever hits
+// STOP reports the letter. Fully cheat-proof rounds would need the round logic
+// to run in Cloud Functions.
 //
 // Every write the apps make is listed in rules-tests/firestore.rules.test.ts.
 // Run those tests after changing this file (see README).
@@ -62,8 +63,10 @@ service cloud.firestore {
         return dealerChangeOk() && (
           // Take the dealer role.
           keys.hasOnly(['currentDealerId'])
-          // End the game when leaving it.
-          || (keys.hasOnly(['status', 'currentDealerId']) && next.status == 'finished')
+          // End the game, but only as part of leaving it (the same write marks them as left).
+          || (keys.hasOnly(['status', 'currentDealerId'])
+              && next.status == 'finished'
+              && getAfter(playerPath(roomId, request.auth.uid)).data.get('leftAt', null) != null)
           // Hit STOP during the fast-or-slow call.
           || (resource.data.status == 'calling'
               && next.status == 'playing'

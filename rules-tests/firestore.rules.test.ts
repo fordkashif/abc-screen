@@ -90,15 +90,53 @@ describe('TV (host)', () => {
     await assertFails(setDoc(doc(as(HOST), 'rooms', 'new'), { code: 'X', status: 'waiting', hostId: 'other' }));
   });
 
-  test('heartbeat, referee and play again', async () => {
+  test('heartbeat and referee: close, score, end', async () => {
     await seed(playing);
     const db = as(HOST);
     await assertSucceeds(updateDoc(room(db), { hostSeenAt: serverTimestamp() }));
     await assertSucceeds(updateDoc(room(db), { roundCloseRequestedAt: serverTimestamp() }));
     await assertSucceeds(scoreRoundOnServer(db, ROOM, 1, 'playing', true));
+    await assertSucceeds(updateDoc(room(db), { status: 'finished', roundCloseRequestedAt: null }));
+  });
+
+  test('referee replaces a missing dealer', async () => {
+    await seed(playing);
+    const db = as(HOST);
+    await assertSucceeds(runTransaction(db, async tx => {
+      await tx.get(room(db));
+      await tx.get(player(db, PLAYER));
+      await tx.get(player(db, DEALER));
+      tx.update(room(db), { currentDealerId: PLAYER });
+      tx.update(player(db, PLAYER), { isDealer: true });
+      tx.update(player(db, DEALER), { isDealer: false });
+    }));
+  });
+
+  test('referee picks a speed and stops the alphabet when nobody does', async () => {
+    await seed({ status: 'calling', roundNumber: 1, letterCall: { ...EMPTY_LETTER_CALL, callingSince: Timestamp.fromMillis(Date.now() - 30_000) } });
+    const db = as(HOST);
+    await assertSucceeds(chooseCallSpeed(db, ROOM, 1, 'fast'));
+    await env.withSecurityRulesDisabled(async ctx => {
+      await updateDoc(room(ctx.firestore() as unknown as Firestore), { 'letterCall.startedAt': Timestamp.fromMillis(Date.now() - 25_000) });
+    });
+    const letter = await assertSucceeds(stopLetterCall(db, ROOM, 1, 'auto', Date.now()));
+    if (!letter) throw new Error('auto STOP did not pick a letter');
+  });
+
+  test('play again resets the room', async () => {
+    await seed({ ...playing, status: 'finished' });
+    const db = as(HOST);
     const batch = writeBatch(db);
-    batch.update(player(db, PLAYER), { score: 0, answers: EMPTY, submitted: false, lastSeenAt: serverTimestamp() });
-    batch.update(room(db), { status: 'waiting', roundNumber: 0 });
+    for (const id of [DEALER, PLAYER]) {
+      batch.update(player(db, id), {
+        ready: false, submitted: false, answers: EMPTY, score: 0, roundScore: 0, scoredRound: 0,
+        roundReady: false, isDealer: id === DEALER, connectionState: 'lobby', lastSeenAt: serverTimestamp(),
+      });
+    }
+    batch.update(room(db), {
+      status: 'waiting', currentDealerId: DEALER, currentLetter: '', roundNumber: 0, letterHistory: [],
+      answerOverrides: {}, roundStartedAt: serverTimestamp(), pausedRemainingSec: null,
+    });
     await assertSucceeds(batch.commit());
   });
 
@@ -173,11 +211,44 @@ describe('dealer', () => {
       });
     }
     batch.update(room(db), {
-      status: 'calling', currentDealerId: DEALER, currentLetter: '', letterHistory: [], letterCall: EMPTY_LETTER_CALL,
+      status: 'calling', currentDealerId: DEALER, currentLetter: '', letterHistory: [],
+      letterCall: { ...EMPTY_LETTER_CALL, callingSince: serverTimestamp() },
       answerOverrides: {}, roundCloseRequestedAt: null, roundNumber: 1, roundStartedAt: null, pausedRemainingSec: null,
     });
     await assertSucceeds(batch.commit());
     await assertSucceeds(chooseCallSpeed(db, ROOM, 1, 'slow'));
+  });
+
+  test('pauses, resumes and ends the round early', async () => {
+    await seed(playing);
+    const db = as(DEALER);
+    await assertSucceeds(updateDoc(room(db), { status: 'paused', pausedRemainingSec: 42 }));
+    await assertSucceeds(updateDoc(room(db), { status: 'playing', roundStartedAt: Timestamp.now(), pausedRemainingSec: null }));
+    await assertSucceeds(updateDoc(room(db), { roundCloseRequestedAt: serverTimestamp() }));
+  });
+
+  test('referee on the dealer phone (TV gone): score, stop, end', async () => {
+    await seed(playing);
+    const db = as(DEALER);
+    await assertSucceeds(scoreRoundOnServer(db, ROOM, 1, 'playing', true));
+    await assertSucceeds(updateDoc(room(db), { status: 'finished', roundCloseRequestedAt: null }));
+  });
+
+  test('next round: rotate dealer and start the call', async () => {
+    await seed({ ...playing, status: 'round_ended' });
+    const db = as(DEALER);
+    const batch = writeBatch(db);
+    for (const id of [DEALER, PLAYER]) {
+      batch.update(player(db, id), {
+        submitted: false, answers: EMPTY, answersRound: 2, roundScore: 0, connectionState: 'playing', isDealer: id === PLAYER,
+      });
+    }
+    batch.update(room(db), {
+      status: 'calling', currentDealerId: PLAYER, roundNumber: 2, currentLetter: '',
+      letterCall: { ...EMPTY_LETTER_CALL, callingSince: serverTimestamp() },
+      answerOverrides: {}, roundCloseRequestedAt: null, roundStartedAt: null, pausedRemainingSec: null,
+    });
+    await assertSucceeds(batch.commit());
   });
 
   test('pauses, approves an answer and scores', async () => {
@@ -221,7 +292,11 @@ describe('players', () => {
   test('autosave and submit while the round is open', async () => {
     await seed(playing);
     const db = as(PLAYER);
-    await assertSucceeds(updateDoc(player(db, PLAYER), { answers: { ...EMPTY, boy: 'Kevin' }, answersRound: 1 }));
+    await assertSucceeds(runTransaction(db, async tx => {
+      await tx.get(room(db));
+      await tx.get(player(db, PLAYER));
+      tx.update(player(db, PLAYER), { answers: { ...EMPTY, boy: 'Kevin' }, answersRound: 1 });
+    }));
     await assertSucceeds(updateDoc(player(db, PLAYER), { answers: { ...EMPTY, boy: 'Kevin' }, answersRound: 1, submitted: true }));
   });
 
@@ -254,6 +329,21 @@ describe('players', () => {
       tx.update(player(db, PLAYER), { isDealer: true });
       tx.update(player(db, DEALER), { isDealer: false });
     }));
+  });
+
+  test('leaves during the fast-or-slow call and ends a two-player game', async () => {
+    await seed({ status: 'calling', roundNumber: 1, letterCall: EMPTY_LETTER_CALL });
+    const db = as(PLAYER);
+    await assertSucceeds(runTransaction(db, async tx => {
+      await tx.get(room(db));
+      tx.update(player(db, PLAYER), { leftAt: serverTimestamp(), connectionState: 'left', lastSeenAt: serverTimestamp(), isDealer: false });
+      tx.update(room(db), { status: 'finished' });
+    }));
+  });
+
+  test('blocked: ending the game without leaving it', async () => {
+    await seed(playing);
+    await assertFails(updateDoc(room(as(PLAYER)), { status: 'finished' }));
   });
 
   test('blocked: handing the dealer role to someone else', async () => {

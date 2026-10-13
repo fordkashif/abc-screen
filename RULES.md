@@ -9,7 +9,7 @@
 
 ## Test before deploying
 
-Needs Java (for the Firestore emulator). From this folder:
+Needs Java (for the Firestore emulator). The first run downloads the Firebase CLI and the emulator. From this folder:
 
 ```bash
 npm install
@@ -18,12 +18,14 @@ npm run test:rules
 
 Every write the TV and phone apps make has an "allowed" test, and the important abuses have "blocked" tests. All should pass.
 
+Players in a room are still trusted to a degree: a player can make themselves dealer, and whoever hits STOP reports the letter. Fully cheat-proof rounds would need the round logic in Cloud Functions.
+
 ## Deploy
 
 ```bash
-npx firebase login
-npx firebase use <your-project-id>
-npx firebase deploy --only firestore:rules
+npx firebase-tools login
+npx firebase-tools use <your-project-id>
+npx firebase-tools deploy --only firestore:rules
 ```
 
 Or paste `firestore.rules` into Firebase Console > Firestore > Rules and publish.
